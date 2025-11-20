@@ -1,1 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sentinel — Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="page-bg">
 
+  <!-- Top nav -->
+  <nav class="topbar">
+    <div class="topbar-left">
+      <div class="logo-circle small">N</div>
+      <div class="nav-title">Sentinel Network — Dashboard</div>
+    </div>
+    <div class="topbar-right">
+      <input id="global-search" placeholder="Search devices (name/mac/ip)..." class="search" />
+      <select id="auto-disconnect" class="small-select" title="Auto-disconnect rule">
+        <option value="off">Auto-disconnect: Off</option>
+        <option value="medium">Auto-disconnect: Medium</option>
+        <option value="high">Auto-disconnect: High</option>
+      </select>
+      <div id="current-signed" class="muted small">Not signed</div>
+      <button id="logout-btn" class="btn outline">Logout</button>
+    </div>
+  </nav>
+
+  <!-- Main layout -->
+  <div class="layout">
+    <!-- left column -->
+    <aside class="sidebar">
+      <div class="card small-card">
+        <h3>Register Device</h3>
+        <label>Device name</label>
+        <input id="device-name" />
+        <label>Device type</label>
+        <select id="device-type">
+          <option>Laptop</option><option>Smartphone</option><option>Tablet</option><option>Other</option>
+        </select>
+        <label>IP address (optional)</label>
+        <input id="device-ip" placeholder="192.168.x.x (optional)" />
+        <label class="required">MAC address (mandatory)</label>
+        <input id="device-mac" placeholder="00:1A:2B:3C:4D:5E" />
+        <div class="row-between">
+          <button id="register-device-btn" class="btn primary">Register (Face)</button>
+          <button id="register-device-skip" class="btn outline">Register (no face)</button>
+        </div>
+        <small class="muted">MAC is mandatory. IP optional.</small>
+      </div>
+
+      <div class="card small-card">
+        <h3>Blocked Devices</h3>
+        <div id="blocked-list" class="list muted">No blocked devices</div>
+        <button id="clear-blocked-btn" class="btn outline small">Clear blocked</button>
+      </div>
+
+      <div class="card small-card">
+        <h3>Threat Log</h3>
+        <div id="threat-log" class="list muted">No events yet</div>
+        <button id="export-log-btn" class="btn outline small">Export Log</button>
+      </div>
+    </aside>
+
+    <!-- right column -->
+    <main class="maincol">
+      <div class="grid-two">
+        <div class="card">
+          <h3>Radar & Scanner</h3>
+          <div class="radar-row">
+            <div id="radar" class="radar-container">
+              <div class="radar-sweep"></div>
+              <svg id="radar-svg" class="radar-svg"></svg>
+            </div>
+
+            <div class="scanner-controls">
+              <button id="start-scan" class="btn primary wide">Start Scan</button>
+              <button id="stop-scan" class="btn outline wide" disabled>Stop</button>
+              <div class="muted small mt-2">Scan interval: <strong id="scan-interval-display">2s</strong></div>
+              <label>Interval (ms)</label>
+              <input id="scan-interval" type="range" min="1000" max="6000" step="500" value="2000" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Detected Devices</h3>
+          <div id="detected-list" class="list">No scan yet.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Registered Devices</h3>
+        <div id="registered-list" class="list">No registered devices.</div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Hidden camera video for face verification -->
+  <div id="cam-overlay" class="cam-overlay hidden">
+    <div class="cam-card">
+      <h3 id="cam-purpose">Face verification</h3>
+      <video id="face-video" autoplay playsinline class="face-video"></video>
+      <div class="row-between mt-2">
+        <button id="cam-accept" class="btn primary">Verified</button>
+        <button id="cam-cancel" class="btn outline">Cancel</button>
+      </div>
+      <div id="cam-msg" class="muted small mt-2">Camera used for simulated face verification only.</div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    // Dashboard bindings
+    document.getElementById('logout-btn').addEventListener('click', ()=>{
+      demoLogout();
+      window.location.href = 'index.html';
+    });
+
+    document.getElementById('register-device-btn').addEventListener('click', async ()=>{
+      try {
+        await registerDeviceWithFace(); // will open camera and require face flow
+      } catch(err){ alert(err.message || 'Register failed'); }
+    });
+    document.getElementById('register-device-skip').addEventListener('click', async ()=>{
+      try {
+        await registerDeviceWithoutFace();
+      } catch(err){ alert(err.message || 'Register failed'); }
+    });
+
+    const startBtn = document.getElementById('start-scan');
+    const stopBtn = document.getElementById('stop-scan');
+    let scanIntervalHandle = null;
+    startBtn.addEventListener('click', ()=>{
+      startScanLoop();
+      startBtn.disabled = true; stopBtn.disabled = false;
+    });
+    stopBtn.addEventListener('click', ()=>{
+      stopScanLoop();
+      startBtn.disabled = false; stopBtn.disabled = true;
+    });
+
+    const scanRange = document.getElementById('scan-interval');
+    const scanIntervalDisplay = document.getElementById('scan-interval-display');
+    scanRange.addEventListener('input', ()=> {
+      scanIntervalDisplay.textContent = scanRange.value + ' ms';
+    });
+
+    document.getElementById('global-search').addEventListener('input',(e)=>{
+      renderAllLists(e.target.value.trim());
+    });
+
+    document.getElementById('clear-blocked-btn').addEventListener('click', ()=>{
+      if(confirm('Clear all blocked devices?')) {
+        clearBlockedDevices();
+      }
+    });
+
+    document.getElementById('export-log-btn').addEventListener('click', ()=>{
+      exportThreatLog();
+    });
+
+    // On load: check session (must be authenticated)
+    window.addEventListener('DOMContentLoaded', ()=>{
+      const cur = getCurrentUser();
+      if(!cur) {
+        // not allowed here — redirect to login
+        alert('You are not signed in. Redirecting to login.');
+        window.location.href = 'index.html';
+        return;
+      }
+      document.getElementById('current-signed').textContent = cur;
+      // load persisted data for this user and render
+      loadUserDataAndRender();
+    });
+  </script>
+</body>
+</html>
