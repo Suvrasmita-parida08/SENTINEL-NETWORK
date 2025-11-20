@@ -1,1 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sentinel — Login</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="page-bg">
 
+  <main class="auth-center">
+    <div class="card auth-card">
+      <div class="brand">
+        <div class="logo-circle">N</div>
+        <div>
+          <h1 class="brand-title">Sentinel Network</h1>
+          <div class="brand-sub">Cybersecurity demo — soldier access</div>
+        </div>
+      </div>
+
+      <form id="login-form" class="form">
+        <label>Username</label>
+        <input id="login-username" placeholder="username" autocomplete="username" />
+        <label>Password</label>
+        <input id="login-password" type="password" placeholder="password" autocomplete="current-password" />
+        <div class="row-between">
+          <button id="login-btn" class="btn primary">Login</button>
+          <a href="signup.html" class="btn link">Create account</a>
+        </div>
+      </form>
+
+      <div class="divider">OR</div>
+
+      <div class="bio-section">
+        <p class="small-muted">Use Face Biometric (camera).</p>
+        <div class="row-between">
+          <button id="login-bio-btn" class="btn outline">Use Face</button>
+          <button id="login-bio-webauthn" class="btn outline" title="Optional WebAuthn demo">WebAuthn</button>
+        </div>
+
+        <video id="login-face-video" autoplay playsinline class="face-video hidden"></video>
+        <div id="login-msg" class="small-muted"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="script.js"></script>
+  <script>
+    // login-page wiring
+    document.getElementById('login-btn').addEventListener('click', async (e)=>{
+      e.preventDefault();
+      const u = document.getElementById('login-username').value.trim();
+      const p = document.getElementById('login-password').value;
+      try {
+        await demoLoginWithPassword(u,p);
+        window.location.href = 'dashboard.html';
+      } catch(err){
+        showMessageOnLogin(err.message || 'Login failed');
+      }
+    });
+
+    document.getElementById('login-bio-btn').addEventListener('click', async ()=>{
+      try {
+        await demoFaceAuth({ purpose: 'login' }); // will set session on success
+        window.location.href = 'dashboard.html';
+      } catch(err){
+        showMessageOnLogin(err.message || 'Face auth failed');
+      }
+    });
+
+    document.getElementById('login-bio-webauthn').addEventListener('click', async ()=>{
+      try {
+        // webauthn login attempt (demo)
+        await loginWithWebAuthn();
+        window.location.href = 'dashboard.html';
+      } catch(err){
+        showMessageOnLogin(err.message || 'WebAuthn failed: ' + (err.message||''));
+      }
+    });
+
+    function showMessageOnLogin(msg){
+      const el = document.getElementById('login-msg');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      setTimeout(()=>el.classList.add('hidden'), 5000);
+    }
+  </script>
+</body>
+</html>
