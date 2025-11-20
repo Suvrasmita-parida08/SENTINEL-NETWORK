@@ -1,1 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sentinel — Sign up</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="page-bg">
 
+  <main class="auth-center">
+    <div class="card auth-card">
+      <div class="brand">
+        <div class="logo-circle">N</div>
+        <div>
+          <h1 class="brand-title">Sentinel — Create Account</h1>
+          <div class="brand-sub">Create soldier account and enroll face biometric</div>
+        </div>
+      </div>
+
+      <form id="signup-form" class="form">
+        <label>Username</label>
+        <input id="signup-username" placeholder="choose username" />
+        <label>Password</label>
+        <input id="signup-password" type="password" placeholder="strong password" />
+        <label>Soldier ID (optional)</label>
+        <input id="signup-soldierid" placeholder="soldier id or unit number" />
+        <div class="row-between">
+          <button id="signup-btn" class="btn primary">Create account</button>
+          <a href="index.html" class="btn link">Back to login</a>
+        </div>
+      </form>
+
+      <div class="divider">Optional</div>
+
+      <div class="bio-section">
+        <p class="small-muted">You can enroll face biometric now (camera will open). This is stored locally for demo only.</p>
+        <div class="row-between">
+          <button id="signup-bio-btn" class="btn outline">Enroll Face</button>
+          <button id="signup-bio-webauthn" class="btn outline">Enroll WebAuthn</button>
+        </div>
+
+        <video id="signup-face-video" autoplay playsinline class="face-video hidden"></video>
+        <div id="signup-msg" class="small-muted"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="script.js"></script>
+  <script>
+    document.getElementById('signup-btn').addEventListener('click', async (e)=>{
+      e.preventDefault();
+      const u = document.getElementById('signup-username').value.trim();
+      const p = document.getElementById('signup-password').value;
+      const sid = document.getElementById('signup-soldierid').value.trim();
+      try {
+        await demoRegisterUser(u,p,{ soldierId: sid });
+        // show success and redirect to login
+        alert('Account created. You can enable Face Biometric now or login with password.');
+        window.location.href = 'index.html';
+      } catch(err){
+        document.getElementById('signup-msg').textContent = err.message || 'Signup failed';
+        setTimeout(()=> document.getElementById('signup-msg').textContent = '', 5000);
+      }
+    });
+
+    document.getElementById('signup-bio-btn').addEventListener('click', async ()=>{
+      try {
+        const u = document.getElementById('signup-username').value.trim();
+        const p = document.getElementById('signup-password').value;
+        if(!u || !p) throw new Error('Enter username & password before enrolling face.');
+        // ensure user exists (or create)
+        const users = loadUsers();
+        if(!users[u]) {
+          await demoRegisterUser(u,p,{});
+        }
+        await demoFaceAuth({ purpose: 'enroll', username: u });
+        alert('Face enrollment simulated for ' + u);
+      } catch(err){
+        document.getElementById('signup-msg').textContent = err.message || 'Face enroll failed';
+        setTimeout(()=> document.getElementById('signup-msg').textContent = '', 5000);
+      }
+    });
+
+    document.getElementById('signup-bio-webauthn').addEventListener('click', async ()=>{
+      try {
+        const u = document.getElementById('signup-username').value.trim();
+        if(!u) throw new Error('Enter username first');
+        await createWebAuthnForUser(u);
+        alert('WebAuthn credential stored for ' + u + ' (demo).');
+      } catch(err){
+        document.getElementById('signup-msg').textContent = err.message || 'WebAuthn failed';
+        setTimeout(()=> document.getElementById('signup-msg').textContent = '', 5000);
+      }
+    });
+  </script>
+</body>
+</html>
